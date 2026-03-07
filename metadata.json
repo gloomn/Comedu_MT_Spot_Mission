@@ -1,0 +1,8 @@
+{
+  "name": "2026 COMEDU MT-SPOT MISSION",
+  "description": "10개의 스팟을 탐험하며 숨겨진 글자를 찾고 미션을 완료하는 모바일 전용 액티비티 앱",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
