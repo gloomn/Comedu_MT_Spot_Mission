@@ -8,8 +8,8 @@ import Notepad from './components/Notepad';
 import AdminDashboard from './components/AdminDashboard';
 import { Trophy, MapPin, Stars, User, ShieldCheck, LayoutGrid, StickyNote, Home, Info, LogOut, Users } from 'lucide-react';
 
-// 🟢 이렇게 수정해야 외부 접속 시에도 현재 도메인을 따라가고, Proxy를 통해 3567 포트 백엔드와 연결됩니다.
-const socket = io('/', { autoConnect: false });
+// 🟢 소켓 연결 자동화 기능 유지 (바로 접속되도록)
+const socket = io('/', { autoConnect: true });
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('LANDING');
@@ -25,6 +25,11 @@ const App: React.FC = () => {
   
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [userPos, setUserPos] = useState<{lat: number, lng: number} | null>(null);
+
+  const saveToLocal = (updatedMemo: string, currentRole: any, currentTeam: string) => {
+    const state: AppState = { spots: [], memo: updatedMemo, role: currentRole, teamName: currentTeam };
+    localStorage.setItem('spotMissionState', JSON.stringify(state));
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('spotMissionState');
@@ -47,6 +52,7 @@ const App: React.FC = () => {
     }
 
     socket.on('init', (data) => {
+      // 🟢 유저 원본 코드 복구: 서버 데이터를 있는 그대로 받아오도록 원복
       if (data.spots && data.spots.length > 0) {
         setSpots(data.spots);
       } else {
@@ -54,13 +60,18 @@ const App: React.FC = () => {
       }
       setSubmissions(data.submissions || []);
       setActiveTeams(data.teams || []);
+      
+      // 메모 실시간 복구 기능은 유지
+      if (teamName && data.memos && data.memos[teamName] !== undefined) {
+        setMemo(data.memos[teamName]);
+        saveToLocal(data.memos[teamName], role, teamName);
+      }
     });
 
     socket.on('teams_updated', (teams: string[]) => setActiveTeams(teams));
-    socket.on('spots_updated', (newSpots: Spot[]) => setSpots(newSpots));
+    socket.on('spots_updated', (newSpots: Spot[]) => setSpots(newSpots)); // 🟢 유저 원본 코드 복구
     socket.on('submissions_updated', (newSubs: Submission[]) => {
       setSubmissions(newSubs);
-      // 모달이 열려있을 때 즉각 상태 반영
       setSelectedSpot(prev => {
         if (!prev) return null;
         const isNowCompleted = newSubs.some(sub => sub.teamName === teamName && sub.spotId === prev.id);
@@ -68,26 +79,31 @@ const App: React.FC = () => {
       });
     });
 
+    socket.on('memo_updated', (data: { teamName: string, memo: string }) => {
+      if (data.teamName === teamName) {
+        setMemo(data.memo);
+        saveToLocal(data.memo, role, teamName);
+      }
+    });
+
+    let watcherId: number | null = null;
     if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
+      watcherId = navigator.geolocation.watchPosition(
         (pos) => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         (err) => console.warn(err),
         { enableHighAccuracy: true }
       );
-      return () => {
-        navigator.geolocation.clearWatch(watcher);
-        socket.off('init');
-        socket.off('teams_updated');
-        socket.off('spots_updated');
-        socket.off('submissions_updated');
-      };
     }
-  }, [teamName]);
 
-  const saveToLocal = (updatedMemo: string, currentRole: any, currentTeam: string) => {
-    const state: AppState = { spots: [], memo: updatedMemo, role: currentRole, teamName: currentTeam };
-    localStorage.setItem('spotMissionState', JSON.stringify(state));
-  };
+    return () => {
+      if (watcherId !== null) navigator.geolocation.clearWatch(watcherId);
+      socket.off('init');
+      socket.off('teams_updated');
+      socket.off('spots_updated');
+      socket.off('submissions_updated');
+      socket.off('memo_updated');
+    };
+  }, [teamName, role]);
 
   const handleLogout = () => {
     localStorage.removeItem('spotMissionState');
@@ -98,11 +114,13 @@ const App: React.FC = () => {
   };
 
   const handleJoinParticipant = () => {
-    if (!teamName.trim()) return alert('팀 이름을 입력해주세요.');
+    const trimmedTeamName = teamName.trim();
+    if (!trimmedTeamName) return alert('팀 이름을 입력해주세요.');
+    setTeamName(trimmedTeamName);
     setRole('PARTICIPANT');
     setView('DASHBOARD');
-    saveToLocal(memo, 'PARTICIPANT', teamName);
-    socket.emit('join_team', teamName);
+    saveToLocal(memo, 'PARTICIPANT', trimmedTeamName);
+    socket.emit('join_team', trimmedTeamName);
   };
 
   const handleJoinAdmin = () => {
@@ -149,7 +167,6 @@ const App: React.FC = () => {
 
   const myTeamSubmissionsCount = submissions.filter(sub => sub.teamName === teamName).length;
 
-  // 🟢 실시간 미션 현황 (리더보드) 데이터
   const leaderboard = Array.from(new Set([...activeTeams, ...submissions.map(s => s.teamName)]))
     .map(team => ({
       team,
@@ -262,7 +279,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* 🟢 실시간 팀 미션 현황 추가 */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
                <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
                  <Users className="w-4 h-4 text-indigo-500" /> 실시간 팀 현황
@@ -315,7 +331,7 @@ const App: React.FC = () => {
                   isNearby={isNearby(spot)}
                   distance={getSpotDistance(spot)}
                   onClick={() => {
-                    // 🟢 짜증나는 alert 모두 제거. 모달창만 띄움.
+                    // 🟢 유저 원본 코드 완벽 복구: MissionType.NONE 유무에 따라 동작 분기 
                     if (completed) {
                       setSelectedSpot({ ...spot, isCompleted: true });
                     } else if (isNearby(spot)) {
@@ -326,12 +342,12 @@ const App: React.FC = () => {
                           missionType: MissionType.NONE,
                           timestamp: Date.now()
                         });
-                        setSelectedSpot({ ...spot, isCompleted: true }); // 완료 즉시 글자 팝업용 모달 오픈
+                        setSelectedSpot({ ...spot, isCompleted: true }); 
                       } else {
                         setSelectedSpot({ ...spot, isCompleted: false });
                       }
                     } else {
-                      // 위치가 멀 때 아무것도 안 하거나 조용히 처리 (alert X)
+                      // 위치가 멀 때 아무것도 안 하거나 조용히 처리
                     }
                   }}
                 />
@@ -346,8 +362,11 @@ const App: React.FC = () => {
             onMemoChange={(val) => {
               setMemo(val);
               saveToLocal(val, role, teamName);
+              socket.emit('update_memo', { teamName, memo: val });
             }} 
-            onSave={() => {}} // 🟢 메모장 저장 시 뜨던 alert도 제거
+            onSave={() => {
+              socket.emit('update_memo', { teamName, memo });
+            }} 
           />
         )}
       </main>
