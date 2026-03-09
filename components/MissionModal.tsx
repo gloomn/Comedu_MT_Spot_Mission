@@ -16,7 +16,7 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
 
   let canSubmit = true;
   if (spot.isCompleted) {
-    canSubmit = false; 
+    canSubmit = true; 
   } else if (spot.missionType === MissionType.REELS || spot.missionType === MissionType.GROUP_SHOT) {
     canSubmit = !!mediaUrl && !isUploading; 
   } else if (spot.missionType === MissionType.TEAM_NAMES) {
@@ -25,6 +25,11 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
 
   const handleComplete = () => {
     if (!canSubmit) return; 
+
+    if (spot.isCompleted) {
+      onClose();
+      return;
+    }
 
     const submission: Partial<Submission> = {
       teamName,
@@ -38,7 +43,6 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
     onClose();
   };
 
-  // 🟢 파일 업로드 방식을 서버 전송 방식으로만 변경 (0초 동영상 오류 해결)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setIsUploading(true);
@@ -65,6 +69,46 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
   };
 
   const renderMissionContent = () => {
+    // 🟢 완료된 미션 처리
+    if (spot.isCompleted) {
+      // 🟢 추가: Spot 5(전화 미션)의 경우 글자를 노출하지 않음
+      if (spot.id === 5) {
+        return (
+          <div className="text-center py-10 space-y-6 animate-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <Phone className="w-10 h-10 text-orange-500" />
+            </div>
+            <p className="text-slate-700 font-bold leading-relaxed">
+              전화 미션을 완료했습니다!<br/>
+              <span className="text-indigo-600">안내받은 단어를 팀 메모장에 기록하세요.</span>
+            </p>
+          </div>
+        );
+      }
+
+      // 그 외의 스팟들은 정상적으로 글자를 보여줌
+      const chars = spot.character.split(',').map(c => c.trim()).filter(Boolean);
+      return (
+        <div className="text-center py-10 space-y-6 animate-in zoom-in duration-300">
+          <div className="flex justify-center gap-3 flex-wrap">
+            {chars.length > 0 ? (
+              chars.map((char, idx) => (
+                <div key={idx} className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white text-3xl font-black shadow-lg transform transition-transform hover:scale-110">
+                  {char}
+                </div>
+              ))
+            ) : (
+              <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center text-slate-400 text-3xl font-black shadow-inner">
+                ?
+              </div>
+            )}
+          </div>
+          <p className="text-indigo-600 font-bold">이 스팟의 미션을 완료하고 글자를 획득했습니다!</p>
+        </div>
+      );
+    }
+
+    // 미완료 상태 렌더링
     switch (spot.missionType) {
       case MissionType.REELS:
         return (
@@ -162,16 +206,21 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 duration-300 flex flex-col max-h-[90vh]">
         <div className="relative p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+          
           <h2 className="text-lg font-bold text-slate-800">
-            {spot.missionType !== MissionType.NONE ? spot.missionTitle : `글자 발견!`}
+            {/* 🟢 수정: Spot 5 완료 시 타이틀을 다르게 표시 */}
+            {spot.isCompleted 
+              ? (spot.id === 5 ? '미션 완료!' : '글자 발견!') 
+              : (spot.missionType !== MissionType.NONE ? spot.missionTitle : `글자 발견!`)}
           </h2>
+          
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
         <div className="p-6 overflow-y-auto no-scrollbar flex-1">
-          {spot.missionType !== MissionType.NONE && (
+          {(!spot.isCompleted && spot.missionType !== MissionType.NONE) && (
             <p className="text-sm text-slate-500 mb-6 leading-relaxed">{spot.missionDescription}</p>
           )}
           {renderMissionContent()}
@@ -184,12 +233,14 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
             className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all
               ${!canSubmit 
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 shadow-lg' 
+                : spot.isCompleted 
+                  ? 'bg-slate-800 text-white hover:bg-slate-900 active:scale-95 shadow-lg' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 shadow-lg' 
               }`}
           >
             <CheckCircle2 className="w-5 h-5" />
             {spot.isCompleted 
-              ? '이미 완료된 미션입니다' 
+              ? '닫기' 
               : spot.missionType !== MissionType.NONE 
                 ? '미션 완료' 
                 : '확인'}

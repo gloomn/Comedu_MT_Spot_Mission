@@ -8,7 +8,7 @@ import Notepad from './components/Notepad';
 import AdminDashboard from './components/AdminDashboard';
 import { Trophy, MapPin, Stars, User, ShieldCheck, LayoutGrid, StickyNote, Home, Info, LogOut, Users } from 'lucide-react';
 
-// 🟢 소켓 연결 자동화 기능 유지 (바로 접속되도록)
+// 소켓 연결 자동화 기능
 const socket = io('/', { autoConnect: true });
 
 const App: React.FC = () => {
@@ -25,6 +25,12 @@ const App: React.FC = () => {
   
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [userPos, setUserPos] = useState<{lat: number, lng: number} | null>(null);
+  
+  // GPS 에러 상태
+  const [gpsErrorMsg, setGpsErrorMsg] = useState<string>('GPS 대기중...');
+  
+  // 🟢 추가: 위치 권한 안내 모달 상태
+  const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
 
   const saveToLocal = (updatedMemo: string, currentRole: any, currentTeam: string) => {
     const state: AppState = { spots: [], memo: updatedMemo, role: currentRole, teamName: currentTeam };
@@ -32,6 +38,11 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // 🟢 추가: 처음 접속 시 위치 권한 모달 띄우기 (로컬 스토리지 확인)
+    if (!localStorage.getItem('locationModalSeen')) {
+      setShowLocationModal(true);
+    }
+
     const saved = localStorage.getItem('spotMissionState');
     if (saved) {
       try {
@@ -52,7 +63,6 @@ const App: React.FC = () => {
     }
 
     socket.on('init', (data) => {
-      // 🟢 유저 원본 코드 복구: 서버 데이터를 있는 그대로 받아오도록 원복
       if (data.spots && data.spots.length > 0) {
         setSpots(data.spots);
       } else {
@@ -61,7 +71,6 @@ const App: React.FC = () => {
       setSubmissions(data.submissions || []);
       setActiveTeams(data.teams || []);
       
-      // 메모 실시간 복구 기능은 유지
       if (teamName && data.memos && data.memos[teamName] !== undefined) {
         setMemo(data.memos[teamName]);
         saveToLocal(data.memos[teamName], role, teamName);
@@ -69,7 +78,7 @@ const App: React.FC = () => {
     });
 
     socket.on('teams_updated', (teams: string[]) => setActiveTeams(teams));
-    socket.on('spots_updated', (newSpots: Spot[]) => setSpots(newSpots)); // 🟢 유저 원본 코드 복구
+    socket.on('spots_updated', (newSpots: Spot[]) => setSpots(newSpots));
     socket.on('submissions_updated', (newSubs: Submission[]) => {
       setSubmissions(newSubs);
       setSelectedSpot(prev => {
@@ -89,10 +98,25 @@ const App: React.FC = () => {
     let watcherId: number | null = null;
     if (navigator.geolocation) {
       watcherId = navigator.geolocation.watchPosition(
-        (pos) => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        (err) => console.warn(err),
-        { enableHighAccuracy: true }
+        (pos) => {
+          setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setGpsErrorMsg(''); 
+        },
+        (err) => {
+          console.warn("GPS Error:", err);
+          if (err.code === 1) setGpsErrorMsg('위치 권한 차단됨');
+          else if (err.code === 2) setGpsErrorMsg('GPS 신호 없음(실내)');
+          else if (err.code === 3) setGpsErrorMsg('GPS 시간 초과');
+          else setGpsErrorMsg('GPS 오류 발생');
+        },
+        { 
+          enableHighAccuracy: true, 
+          maximumAge: 5000,     
+          timeout: 15000        
+        }
       );
+    } else {
+      setGpsErrorMsg('GPS 지원 안하는 기기');
     }
 
     return () => {
@@ -105,12 +129,33 @@ const App: React.FC = () => {
     };
   }, [teamName, role]);
 
+  // 🟢 추가: 위치 권한 모달 닫기 및 권한 요청 트리거
+  const handleAcceptLocation = () => {
+    localStorage.setItem('locationModalSeen', 'true');
+    setShowLocationModal(false);
+    
+    // 사용자가 버튼을 눌렀을 때 브라우저의 기본 위치 권한 팝업을 강제로 띄웁니다.
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => {}, 
+        () => {}, 
+        { enableHighAccuracy: true }
+      );
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('spotMissionState');
     setRole('GUEST');
     setView('LANDING');
     setTeamName('');
     setAdminPass('');
+  };
+
+  const handleDeleteTeam = (teamNameToDelete: string) => {
+    if (window.confirm(`정말 '${teamNameToDelete}' 팀을 삭제하시겠습니까?\n해당 팀의 미션 제출 기록과 메모가 모두 영구 삭제됩니다.`)) {
+      socket.emit('delete_team', teamNameToDelete);
+    }
   };
 
   const handleJoinParticipant = () => {
@@ -174,227 +219,255 @@ const App: React.FC = () => {
     }))
     .sort((a, b) => b.completed - a.completed);
 
-  if (view === 'LANDING') {
-    return (
-      <div className="min-h-screen max-w-md mx-auto bg-indigo-600 flex flex-col items-center justify-center p-8 text-white relative overflow-hidden">
-        <Stars className="absolute -right-10 -top-10 w-64 h-64 text-white opacity-10 animate-pulse" />
-        <div className="relative z-10 w-full space-y-12">
-          <div className="text-center flex flex-col items-center">
-            <Trophy className="w-16 h-16 text-amber-300 mb-4" />
-            <span className="text-sm font-bold opacity-80 uppercase tracking-widest mb-1">2026 COMEDU MT</span>
-            <h1 className="text-5xl font-black tracking-tighter uppercase">SPOT-MISSION</h1>
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-white/10 backdrop-blur-lg p-6 rounded-3xl border border-white/20 space-y-4">
-              <h2 className="flex items-center gap-2 font-bold text-lg"><User className="w-5 h-5" /> 참여자 입장</h2>
-              <input 
-                placeholder="팀 이름을 입력하세요"
-                className="w-full bg-white/20 border-none rounded-2xl p-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/30"
-                value={teamName}
-                onChange={e => setTeamName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleJoinParticipant()}
-              />
-              <button onClick={handleJoinParticipant} className="w-full bg-white text-indigo-600 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-colors">
-                시작하기
-              </button>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-lg p-6 rounded-3xl border border-white/10 space-y-4">
-              <h2 className="flex items-center gap-2 font-bold opacity-80"><ShieldCheck className="w-5 h-5" /> 관리자 로그인</h2>
-              <input 
-                type="password"
-                placeholder="관리자 패스워드"
-                className="w-full bg-white/10 border-none rounded-2xl p-4 text-white placeholder-indigo-300 outline-none focus:ring-2 focus:ring-white/20"
-                value={adminPass}
-                onChange={e => setAdminPass(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleJoinAdmin()}
-              />
-              <button onClick={handleJoinAdmin} className="w-full bg-indigo-900/40 text-white/80 py-4 rounded-2xl font-bold border border-white/10">
-                관리자 입장
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (view === 'ADMIN_PANEL') {
-    return <AdminDashboard 
-      spots={spots} 
-      submissions={submissions}
-      activeTeams={Array.from(new Set([...activeTeams, ...submissions.map(s => s.teamName)]))} 
-      onUpdateSpots={handleUpdateSpots} 
-      userPos={userPos} 
-      onLogout={handleLogout} 
-    />;
-  }
-
   return (
-    <div className="min-h-screen max-w-md mx-auto bg-slate-50 flex flex-col pb-24">
-      <header className="bg-indigo-600 px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-xl text-white relative overflow-hidden">
-        <Stars className="absolute -right-4 -top-4 w-32 h-32 text-indigo-500 opacity-30" />
-        <div className="relative z-10">
-          <div className="flex justify-between items-center mb-4">
-             <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-300" />
-                <span className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">{teamName} TEAM</span>
-             </div>
-             <div className="flex items-center gap-3">
-               {!userPos && <span className="text-[10px] bg-red-500/30 px-2 py-1 rounded-full animate-pulse">GPS 대기중</span>}
-               <button onClick={handleLogout} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
-                 <LogOut className="w-4 h-4 text-white" />
-               </button>
-             </div>
+    <>
+      {/* 🟢 추가: 위치 권한 안내 모달 (모든 화면 위에 최상단으로 렌더링) */}
+      {showLocationModal && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <MapPin className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-black text-center text-slate-800 mb-4">위치 권한 허용 안내</h2>
+            <div className="text-sm text-center text-slate-600 mb-8 leading-relaxed space-y-2">
+              <p>스팟 미션을 진행하려면 <strong>현재 위치(GPS)</strong> 정보가 반드시 필요합니다.</p>
+              <p className="text-xs bg-slate-50 p-3 rounded-xl text-slate-500">
+                다음 화면에서 브라우저가 위치 권한을 요청하면 <br/>
+                반드시 <strong className="text-indigo-600">"허용"</strong>을 선택해 주세요!
+              </p>
+            </div>
+            <button 
+              onClick={handleAcceptLocation}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+            >
+              확인 및 권한 허용하기
+            </button>
           </div>
-          <h1 className="text-2xl font-black">
-            {tab === 'HOME' ? '미션 현황' : tab === 'MISSION' ? '스팟 리스트' : '메모장'}
-          </h1>
         </div>
-      </header>
+      )}
 
-      <main className="flex-1 px-6 mt-6">
-        {tab === 'HOME' && (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-400 mb-1">우리 팀 진행률</p>
-                <h2 className="text-4xl font-black text-slate-800">{myTeamSubmissionsCount * 10}%</h2>
-              </div>
-              <div className="relative w-24 h-24">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-100" />
-                  <circle 
-                    cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="10" fill="transparent" 
-                    strokeDasharray="263.89" 
-                    strokeDashoffset={263.89 - (263.89 * (myTeamSubmissionsCount / 10))} 
-                    className="text-indigo-500 transition-all duration-1000"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-600">
-                  {myTeamSubmissionsCount}/10
-                </div>
-              </div>
+      {/* 랜딩 화면 (로그인) */}
+      {view === 'LANDING' && (
+        <div className="min-h-screen max-w-md mx-auto bg-indigo-600 flex flex-col items-center justify-center p-8 text-white relative overflow-hidden">
+          <Stars className="absolute -right-10 -top-10 w-64 h-64 text-white opacity-10 animate-pulse" />
+          <div className="relative z-10 w-full space-y-12">
+            <div className="text-center flex flex-col items-center">
+              <Trophy className="w-16 h-16 text-amber-300 mb-4" />
+              <span className="text-sm font-bold opacity-80 uppercase tracking-widest mb-1">2026 COMEDU MT</span>
+              <h1 className="text-5xl font-black tracking-tighter uppercase">SPOT-MISSION</h1>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-               <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                 <Users className="w-4 h-4 text-indigo-500" /> 실시간 팀 현황
-               </h3>
-               {leaderboard.length === 0 ? (
-                 <p className="text-xs text-slate-400 text-center">아직 접속한 팀이 없습니다.</p>
-               ) : (
-                 <div className="space-y-3">
-                   {leaderboard.map((item, index) => (
-                     <div key={item.team} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                       <div className="flex items-center gap-3">
-                         <span className={`text-xs font-black w-5 h-5 flex items-center justify-center rounded-full ${index === 0 ? 'bg-amber-100 text-amber-600' : index === 1 ? 'bg-slate-200 text-slate-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'text-slate-400'}`}>
-                           {index + 1}
-                         </span>
-                         <span className={`text-sm font-bold ${item.team === teamName ? 'text-indigo-600' : 'text-slate-700'}`}>
-                           {item.team} {item.team === teamName && '(우리 팀)'}
-                         </span>
-                       </div>
-                       <div className="flex items-center gap-2">
-                         <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden">
-                           <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${item.completed * 10}%` }}></div>
-                         </div>
-                         <span className="text-xs font-bold text-slate-500 w-6 text-right">{item.completed}/10</span>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               )}
-            </div>
-            
-            <div className="bg-white border border-slate-200 rounded-3xl p-6">
-               <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-indigo-500" /> 알아두세요</h3>
-               <p className="text-xs text-slate-500 leading-relaxed">
-                 지도상의 스팟에 50m 이내로 접근해야 봉투를 열 수 있습니다. <br/><br/>
-                 미션을 완료할 때마다 스팟에 숨겨진 <strong>'글자'</strong>를 획득하게 됩니다. 10개 스팟에 숨겨진 글자들을 모두 모아 팀 메모장에 기록하고 최종 정답을 완성하세요!
-               </p>
-            </div>
-          </div>
-        )}
-
-        {tab === 'MISSION' && (
-          <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
-            {spots.map((spot) => {
-              const completed = checkIsCompleted(spot.id);
-              return (
-                <Envelope
-                  key={spot.id}
-                  spotId={spot.id}
-                  isOpen={completed}
-                  isNearby={isNearby(spot)}
-                  distance={getSpotDistance(spot)}
-                  onClick={() => {
-                    // 🟢 유저 원본 코드 완벽 복구: MissionType.NONE 유무에 따라 동작 분기 
-                    if (completed) {
-                      setSelectedSpot({ ...spot, isCompleted: true });
-                    } else if (isNearby(spot)) {
-                      if (spot.missionType === MissionType.NONE) {
-                        handleMissionComplete(spot.id, {
-                          teamName,
-                          spotId: spot.id,
-                          missionType: MissionType.NONE,
-                          timestamp: Date.now()
-                        });
-                        setSelectedSpot({ ...spot, isCompleted: true }); 
-                      } else {
-                        setSelectedSpot({ ...spot, isCompleted: false });
-                      }
-                    } else {
-                      // 위치가 멀 때 아무것도 안 하거나 조용히 처리
-                    }
-                  }}
+            <div className="space-y-4">
+              <div className="bg-white/10 backdrop-blur-lg p-6 rounded-3xl border border-white/20 space-y-4">
+                <h2 className="flex items-center gap-2 font-bold text-lg"><User className="w-5 h-5" /> 참여자 입장</h2>
+                <input 
+                  placeholder="팀 이름을 입력하세요"
+                  className="w-full bg-white/20 border-none rounded-2xl p-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/30"
+                  value={teamName}
+                  onChange={e => setTeamName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoinParticipant()}
                 />
-              );
-            })}
+                <button onClick={handleJoinParticipant} className="w-full bg-white text-indigo-600 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-colors">
+                  시작하기
+                </button>
+              </div>
+
+              <div className="bg-white/5 backdrop-blur-lg p-6 rounded-3xl border border-white/10 space-y-4">
+                <h2 className="flex items-center gap-2 font-bold opacity-80"><ShieldCheck className="w-5 h-5" /> 관리자 로그인</h2>
+                <input 
+                  type="password"
+                  placeholder="관리자 패스워드"
+                  className="w-full bg-white/10 border-none rounded-2xl p-4 text-white placeholder-indigo-300 outline-none focus:ring-2 focus:ring-white/20"
+                  value={adminPass}
+                  onChange={e => setAdminPass(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleJoinAdmin()}
+                />
+                <button onClick={handleJoinAdmin} className="w-full bg-indigo-900/40 text-white/80 py-4 rounded-2xl font-bold border border-white/10">
+                  관리자 입장
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {tab === 'MEMO' && (
-          <Notepad 
-            memo={memo} 
-            onMemoChange={(val) => {
-              setMemo(val);
-              saveToLocal(val, role, teamName);
-              socket.emit('update_memo', { teamName, memo: val });
-            }} 
-            onSave={() => {
-              socket.emit('update_memo', { teamName, memo });
-            }} 
-          />
-        )}
-      </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-8 py-4 flex justify-between items-center z-40 max-w-md mx-auto rounded-t-3xl shadow-2xl">
-        <button onClick={() => setTab('HOME')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'HOME' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
-          <Home className="w-6 h-6" />
-          <span className="text-[10px] font-bold">홈</span>
-        </button>
-        <button onClick={() => setTab('MISSION')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'MISSION' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
-          <LayoutGrid className="w-6 h-6" />
-          <span className="text-[10px] font-bold">미션</span>
-        </button>
-        <button onClick={() => setTab('MEMO')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'MEMO' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
-          <StickyNote className="w-6 h-6" />
-          <span className="text-[10px] font-bold">메모</span>
-        </button>
-      </nav>
-
-      {selectedSpot && (
-        <MissionModal
-          spot={selectedSpot}
-          teamName={teamName}
-          onClose={() => setSelectedSpot(null)}
-          onComplete={handleMissionComplete}
+      {/* 관리자 대시보드 */}
+      {view === 'ADMIN_PANEL' && (
+        <AdminDashboard 
+          spots={spots} 
+          submissions={submissions}
+          activeTeams={Array.from(new Set([...activeTeams, ...submissions.map(s => s.teamName)]))} 
+          onUpdateSpots={handleUpdateSpots} 
+          userPos={userPos} 
+          onLogout={handleLogout}
+          onDeleteTeam={handleDeleteTeam}
         />
       )}
-    </div>
+
+      {/* 참가자 메인 화면 */}
+      {view === 'DASHBOARD' && (
+        <div className="min-h-screen max-w-md mx-auto bg-slate-50 flex flex-col pb-24">
+          <header className="bg-indigo-600 px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-xl text-white relative overflow-hidden">
+            <Stars className="absolute -right-4 -top-4 w-32 h-32 text-indigo-500 opacity-30" />
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-4">
+                 <div className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-amber-300" />
+                    <span className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">{teamName} TEAM</span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   {!userPos && <span className="text-[10px] bg-red-500/30 px-2 py-1 rounded-full animate-pulse">{gpsErrorMsg}</span>}
+                   <button onClick={handleLogout} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
+                     <LogOut className="w-4 h-4 text-white" />
+                   </button>
+                 </div>
+              </div>
+              <h1 className="text-2xl font-black">
+                {tab === 'HOME' ? '미션 현황' : tab === 'MISSION' ? '스팟 리스트' : '메모장'}
+              </h1>
+            </div>
+          </header>
+
+          <main className="flex-1 px-6 mt-6">
+            {tab === 'HOME' && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 mb-1">우리 팀 진행률</p>
+                    <h2 className="text-4xl font-black text-slate-800">{myTeamSubmissionsCount * 10}%</h2>
+                  </div>
+                  <div className="relative w-24 h-24">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-slate-100" />
+                      <circle 
+                        cx="50" cy="50" r="42" stroke="currentColor" strokeWidth="10" fill="transparent" 
+                        strokeDasharray="263.89" 
+                        strokeDashoffset={263.89 - (263.89 * (myTeamSubmissionsCount / 10))} 
+                        className="text-indigo-500 transition-all duration-1000"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-600">
+                      {myTeamSubmissionsCount}/10
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                   <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                     <Users className="w-4 h-4 text-indigo-500" /> 실시간 팀 현황
+                   </h3>
+                   {leaderboard.length === 0 ? (
+                     <p className="text-xs text-slate-400 text-center">아직 접속한 팀이 없습니다.</p>
+                   ) : (
+                     <div className="space-y-3">
+                       {leaderboard.map((item, index) => (
+                         <div key={item.team} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                           <div className="flex items-center gap-3">
+                             <span className={`text-xs font-black w-5 h-5 flex items-center justify-center rounded-full ${index === 0 ? 'bg-amber-100 text-amber-600' : index === 1 ? 'bg-slate-200 text-slate-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'text-slate-400'}`}>
+                               {index + 1}
+                             </span>
+                             <span className={`text-sm font-bold ${item.team === teamName ? 'text-indigo-600' : 'text-slate-700'}`}>
+                               {item.team} {item.team === teamName && '(우리 팀)'}
+                             </span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                             <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden">
+                               <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${item.completed * 10}%` }}></div>
+                             </div>
+                             <span className="text-xs font-bold text-slate-500 w-6 text-right">{item.completed}/10</span>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                </div>
+                
+                <div className="bg-white border border-slate-200 rounded-3xl p-6">
+                   <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Info className="w-4 h-4 text-indigo-500" /> 알아두세요</h3>
+                   <p className="text-xs text-slate-500 leading-relaxed">
+                     지도상의 스팟에 50m 이내로 접근해야 봉투를 열 수 있습니다. <br/><br/>
+                     미션을 완료할 때마다 스팟에 숨겨진 <strong>'글자'</strong>를 획득하게 됩니다. 10개 스팟에 숨겨진 글자들을 모두 모아 팀 메모장에 기록하고 최종 정답을 완성하세요!
+                   </p>
+                </div>
+              </div>
+            )}
+
+            {tab === 'MISSION' && (
+              <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
+                {spots.map((spot) => {
+                  const completed = checkIsCompleted(spot.id);
+                  return (
+                    <Envelope
+                      key={spot.id}
+                      spotId={spot.id}
+                      isOpen={completed}
+                      isNearby={isNearby(spot)}
+                      distance={getSpotDistance(spot)}
+                      onClick={() => {
+                        if (completed) {
+                          setSelectedSpot({ ...spot, isCompleted: true });
+                        } else if (isNearby(spot)) {
+                          if (spot.missionType === MissionType.NONE) {
+                            handleMissionComplete(spot.id, {
+                              teamName,
+                              spotId: spot.id,
+                              missionType: MissionType.NONE,
+                              timestamp: Date.now()
+                            });
+                            setSelectedSpot({ ...spot, isCompleted: true }); 
+                          } else {
+                            setSelectedSpot({ ...spot, isCompleted: false });
+                          }
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {tab === 'MEMO' && (
+              <Notepad 
+                memo={memo} 
+                onMemoChange={(val) => {
+                  setMemo(val);
+                  saveToLocal(val, role, teamName);
+                  socket.emit('update_memo', { teamName, memo: val });
+                }} 
+                onSave={() => {
+                  socket.emit('update_memo', { teamName, memo });
+                }} 
+              />
+            )}
+          </main>
+
+          <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-8 py-4 flex justify-between items-center z-40 max-w-md mx-auto rounded-t-3xl shadow-2xl">
+            <button onClick={() => setTab('HOME')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'HOME' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
+              <Home className="w-6 h-6" />
+              <span className="text-[10px] font-bold">홈</span>
+            </button>
+            <button onClick={() => setTab('MISSION')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'MISSION' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
+              <LayoutGrid className="w-6 h-6" />
+              <span className="text-[10px] font-bold">미션</span>
+            </button>
+            <button onClick={() => setTab('MEMO')} className={`flex flex-col items-center gap-1 transition-colors ${tab === 'MEMO' ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-400'}`}>
+              <StickyNote className="w-6 h-6" />
+              <span className="text-[10px] font-bold">메모</span>
+            </button>
+          </nav>
+
+          {selectedSpot && (
+            <MissionModal
+              spot={selectedSpot}
+              teamName={teamName}
+              onClose={() => setSelectedSpot(null)}
+              onComplete={handleMissionComplete}
+            />
+          )}
+        </div>
+      )}
+    </>
   );
 };
 

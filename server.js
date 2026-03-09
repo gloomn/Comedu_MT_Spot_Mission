@@ -118,6 +118,28 @@ io.on('connection', (socket) => {
     saveData();
   });
 
+  // 🟢 팀 삭제 이벤트 추가
+  socket.on('delete_team', (teamName) => {
+    if (teamName) {
+      // 1. 전역 팀 목록에서 제거
+      globalTeams.delete(teamName);
+      
+      // 2. 해당 팀의 미션 제출 기록 모두 삭제
+      globalSubmissions = globalSubmissions.filter(sub => sub.teamName !== teamName);
+      
+      // 3. 해당 팀의 메모 기록 삭제
+      if (globalMemos[teamName]) {
+        delete globalMemos[teamName];
+      }
+      
+      // 4. 모든 클라이언트에게 업데이트된 데이터 브로드캐스트
+      io.emit('teams_updated', Array.from(globalTeams));
+      io.emit('submissions_updated', globalSubmissions);
+      
+      saveData();
+    }
+  });
+
   socket.on('disconnect', () => console.log('User disconnected:', socket.id));
 });
 

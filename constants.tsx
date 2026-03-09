@@ -1,6 +1,7 @@
 import { MissionType, Spot } from './types';
 
-export const SPOT_CHARACTERS = ["2026", "", "컴, 리 ", " 육, 퓨", "이, 은?", "MT", "우, 교", "팀, 름", "터", "과"];
+// 🟢 수정: Spot 5(인덱스 4)를 "과", Spot 10(인덱스 9)을 "이, 은?"으로 교체
+export const SPOT_CHARACTERS = ["2026", "름", "컴, 리 ", " 육, 퓨", "과", "MT", "우, 교", "팀", "터", "이, 은?"];
 export const ADMIN_PASSWORD = "2026comedumt!";
 export const MISSION_RADIUS_METERS = 50; // Distance to allow opening
 
