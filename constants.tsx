@@ -1,6 +1,6 @@
 import { MissionType, Spot } from './types';
 
-// 🟢 수정: Spot 5(인덱스 4)를 "과", Spot 10(인덱스 9)을 "이, 은?"으로 교체
+// 이전 요청사항인 글자 교체 내용이 포함되어 있습니다.
 export const SPOT_CHARACTERS = ["2026", "름", "컴, 리 ", " 육, 퓨", "과", "MT", "우, 교", "팀", "터", "이, 은?"];
 export const ADMIN_PASSWORD = "2026comedumt!";
 export const MISSION_RADIUS_METERS = 50; // Distance to allow opening
@@ -33,4 +33,14 @@ export const getDistance = (lat1: number, lon1: number, lat2: number, lon2: numb
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+};
+
+// 🟢 추가: 참여할 팀 목록과 각 팀의 비밀번호 설정
+export const TEAM_CREDENTIALS: Record<string, string> = {
+  "1조": "1111",
+  "2조": "2222",
+  "3조": "3333",
+  "4조": "4444",
+  "5조": "5555",
+  "6조": "6666",
 };

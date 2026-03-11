@@ -10,12 +10,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. 영상을 저장할 uploads 폴더 자동 생성
 if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
 
-// 2. Multer 업로드 설정
+// 업로드 용량 제한 50MB 유지
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
@@ -23,42 +22,56 @@ const storage = multer.diskStorage({
     cb(null, 'media-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage });
-
-app.use('/uploads', express.static('uploads'));
-app.post('/api/upload', upload.single('media'), (req, res) => {
-  if (!req.file) return res.status(400).send('파일이 없습니다.');
-  res.json({ url: `/uploads/${req.file.filename}` }); 
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
-// 3. 데이터 영구 보존용 파일 경로 및 초기화
+app.use('/uploads', express.static('uploads'));
+app.post('/api/upload', (req, res) => {
+  upload.single('media')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: '파일 용량이 너무 큽니다. (최대 50MB)' });
+      }
+      return res.status(400).json({ error: '업로드 중 오류가 발생했습니다.' });
+    }
+    if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' });
+    res.json({ url: `/uploads/${req.file.filename}` }); 
+  });
+});
+
 const DATA_FILE = 'data.json';
 let globalSpots = [];
 let globalSubmissions = [];
 let globalTeams = new Set();
-let globalMemos = {}; // 🟢 팀별 메모 저장 객체 추가
+let globalMemos = {}; 
+let globalTeamPasswords = {}; 
 
-// 서버 시작 시 기존 데이터가 있다면 불러오기
+// 🟢 추가: 현재 팀별로 접속 중인 단 1개의 기기(소켓 ID)를 기억하는 객체
+let activeTeamSockets = {};
+
 if (fs.existsSync(DATA_FILE)) {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
     if (data.spots) globalSpots = data.spots;
     if (data.submissions) globalSubmissions = data.submissions;
     if (data.teams) globalTeams = new Set(data.teams);
-    if (data.memos) globalMemos = data.memos; // 🟢 메모 복구
+    if (data.memos) globalMemos = data.memos;
+    if (data.teamPasswords) globalTeamPasswords = data.teamPasswords;
     console.log('✅ 기존 데이터를 성공적으로 복구했습니다!');
   } catch (e) {
     console.error('❌ 데이터 파일 읽기 오류:', e);
   }
 }
 
-// 데이터 변경 시마다 JSON 파일에 기록하는 함수
 const saveData = () => {
   const data = {
     spots: globalSpots,
     submissions: globalSubmissions,
     teams: Array.from(globalTeams),
-    memos: globalMemos // 🟢 메모 데이터도 함께 저장
+    memos: globalMemos,
+    teamPasswords: globalTeamPasswords
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
 };
@@ -73,7 +86,6 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   const sendInitData = () => {
-    // 🟢 memos 데이터도 함께 전송하여 클라이언트 동기화
     socket.emit('init', { 
       spots: globalSpots, 
       submissions: globalSubmissions, 
@@ -85,11 +97,46 @@ io.on('connection', (socket) => {
   sendInitData();
   socket.on('request_init', () => sendInitData());
   
-  socket.on('join_team', (teamName) => {
-    if (teamName) {
+  socket.on('join_team', (data, callback) => {
+    if (typeof data === 'string') return; 
+
+    const { teamName, password } = data;
+    if (!teamName || !password) {
+      if (callback) callback({ success: false, message: '팀 이름과 비밀번호를 모두 입력해주세요.' });
+      return;
+    }
+
+    let isSuccess = false;
+
+    if (globalTeams.has(teamName)) {
+      if (globalTeamPasswords[teamName] === password) {
+        isSuccess = true;
+      } else {
+        if (callback) callback({ success: false, message: '비밀번호가 틀렸습니다. 다시 확인해주세요.' });
+        return;
+      }
+    } else {
       globalTeams.add(teamName);
+      globalTeamPasswords[teamName] = password;
       io.emit('teams_updated', Array.from(globalTeams));
       saveData();
+      isSuccess = true;
+    }
+
+    // 🟢 기기 1대 제한 로직: 로그인 성공 시 기존 기기 강제 로그아웃
+    if (isSuccess) {
+      const previousSocketId = activeTeamSockets[teamName];
+      // 이미 접속 중인 기기가 있다면?
+      if (previousSocketId && previousSocketId !== socket.id) {
+        // 기존 기기에 '강제 로그아웃' 이벤트 전송
+        io.to(previousSocketId).emit('force_logout', '다른 기기에서 접속하여 현재 기기는 로그아웃됩니다. (1팀 1기기 제한)');
+      }
+      
+      // 방금 로그인한 기기를 활성 기기로 등록
+      activeTeamSockets[teamName] = socket.id;
+      socket.teamName = teamName; 
+      
+      if (callback) callback({ success: true });
     }
   });
 
@@ -110,37 +157,35 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 🟢 실시간 팀 메모장 동기화 이벤트
   socket.on('update_memo', ({ teamName, memo }) => {
     globalMemos[teamName] = memo;
-    // 변경된 메모를 모든 클라이언트(같은 팀원들)에게 즉시 브로드캐스트
     io.emit('memo_updated', { teamName, memo });
     saveData();
   });
 
-  // 🟢 팀 삭제 이벤트 추가
   socket.on('delete_team', (teamName) => {
     if (teamName) {
-      // 1. 전역 팀 목록에서 제거
       globalTeams.delete(teamName);
-      
-      // 2. 해당 팀의 미션 제출 기록 모두 삭제
       globalSubmissions = globalSubmissions.filter(sub => sub.teamName !== teamName);
+      if (globalMemos[teamName]) delete globalMemos[teamName];
+      if (globalTeamPasswords[teamName]) delete globalTeamPasswords[teamName]; 
       
-      // 3. 해당 팀의 메모 기록 삭제
-      if (globalMemos[teamName]) {
-        delete globalMemos[teamName];
-      }
-      
-      // 4. 모든 클라이언트에게 업데이트된 데이터 브로드캐스트
+      // 활성 소켓 정보도 삭제
+      if (activeTeamSockets[teamName]) delete activeTeamSockets[teamName];
+
       io.emit('teams_updated', Array.from(globalTeams));
       io.emit('submissions_updated', globalSubmissions);
-      
       saveData();
     }
   });
 
-  socket.on('disconnect', () => console.log('User disconnected:', socket.id));
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    // 연결이 완전히 끊기면 활성 기기 목록에서도 비워주기
+    if (socket.teamName && activeTeamSockets[socket.teamName] === socket.id) {
+      delete activeTeamSockets[socket.teamName];
+    }
+  });
 });
 
 const PORT = 3567;

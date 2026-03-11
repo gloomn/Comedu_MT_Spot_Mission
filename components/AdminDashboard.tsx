@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Submission, Spot } from '../types';
-import { Users, ClipboardList, CheckCircle, Clock, ArrowLeft, MapPin, Save, Crosshair, Map, Trash2 } from 'lucide-react';
+// 🟢 수정: StickyNote 아이콘 추가
+import { Users, ClipboardList, CheckCircle, Clock, ArrowLeft, MapPin, Save, Crosshair, Map, Trash2, StickyNote } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -13,9 +14,9 @@ interface AdminDashboardProps {
   userPos: {lat: number, lng: number} | null;
   onLogout: () => void;
   onDeleteTeam: (teamName: string) => void;
+  memos: Record<string, string>; // 🟢 추가: 모든 팀의 메모 데이터
 }
 
-// 스팟 마커 아이콘 (파란색 원)
 const createSpotIcon = (id: number) => L.divIcon({
   className: 'custom-spot-icon',
   html: `<div style="background-color: #4f46e5; width: 26px; height: 26px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 13px;">${id}</div>`,
@@ -23,7 +24,6 @@ const createSpotIcon = (id: number) => L.divIcon({
   iconAnchor: [13, 13]
 });
 
-// 관리자 내 위치 마커 아이콘 (빨간 점)
 const userIcon = L.divIcon({
   className: 'custom-user-icon',
   html: `<div style="background-color: #ef4444; width: 14px; height: 14px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
@@ -31,11 +31,10 @@ const userIcon = L.divIcon({
   iconAnchor: [7, 7]
 });
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, activeTeams = [], onUpdateSpots, userPos, onLogout, onDeleteTeam }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, activeTeams = [], onUpdateSpots, userPos, onLogout, onDeleteTeam, memos }) => {
   const [activeAdminTab, setActiveAdminTab] = useState<'STATUS' | 'SETTINGS'>('STATUS');
   const [localSpots, setLocalSpots] = useState<Spot[]>(spots);
 
-  // 서버의 위치 데이터와 실시간 동기화
   useEffect(() => {
     setLocalSpots(spots);
   }, [spots]);
@@ -52,12 +51,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
       s.id === spotId ? { ...s, lat: userPos.lat, lng: userPos.lng } : s
     );
     setLocalSpots(updated);
-    alert(`📍 ${spotId}번 스팟이 현재 내 위치로 변경되었습니다.\n\n(상단의 '전체 동기화' 버튼을 눌러야 참가자들에게 반영됩니다!)`);
+    alert(`📍 ${spotId}번 스팟이 현재 내 위치로 변경되었습니다.\n\n(상단의 '전체 동기화' 버튼을 눌러야 최종 반영됩니다!)`);
   };
 
   const handleSaveAllSpots = () => {
     onUpdateSpots(localSpots);
-    alert('✅ 모든 스팟의 위치가 참가자들의 앱에 실시간으로 동기화되었습니다!');
+    alert('✅ 스팟의 이름과 위치가 영구 저장되었으며, 참가자들에게 동기화되었습니다!');
   };
 
   return (
@@ -122,10 +121,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
       <main className="px-6 mt-8 space-y-6">
         {activeAdminTab === 'STATUS' ? (
           <>
-            <h2 className="text-lg font-bold flex items-center gap-2"><ClipboardList className="w-5 h-5" /> 팀별 미션 현황</h2>
+            <h2 className="text-lg font-bold flex items-center gap-2"><ClipboardList className="w-5 h-5" /> 팀별 현황</h2>
             {teams.length === 0 ? (
               <div className="bg-white p-10 rounded-3xl text-center text-slate-400 border border-slate-200 border-dashed">
-                아직 제출된 미션이 없습니다.
+                아직 접속한 팀이 없습니다.
               </div>
             ) : (
               teams.map(team => {
@@ -133,8 +132,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
                 return (
                   <div key={team} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
                     <div className="flex items-center justify-between mb-4 border-b border-slate-50 pb-3">
-                      
-                      {/* 🟢 수정: 팀 이름 옆에 삭제 버튼 추가 */}
                       <div className="flex items-center gap-2">
                         <h3 className="font-bold text-slate-800 text-lg">{team} 팀</h3>
                         <button 
@@ -145,18 +142,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      
                       <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                        {teamSubs.length} / 10 완료
+                        미션 {teamSubs.length}/10
                       </span>
                     </div>
+
+                    {/* 🟢 추가: 관리자가 팀들의 메모를 실시간으로 볼 수 있는 뷰어 */}
+                    <div className="mb-4 bg-amber-50 rounded-2xl p-4 border border-amber-100/50 relative overflow-hidden">
+                      <div className="flex items-center gap-2 mb-2 text-amber-800">
+                        <StickyNote className="w-4 h-4" />
+                        <h4 className="text-xs font-bold">실시간 팀 메모장</h4>
+                      </div>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed font-medium">
+                        {memos[team] ? memos[team] : <span className="text-slate-400 italic">아직 작성된 메모가 없습니다.</span>}
+                      </p>
+                    </div>
+
                     <div className="space-y-4">
                       {teamSubs.length === 0 ? (
                         <p className="text-xs text-slate-400 text-center py-4">아직 제출된 미션이 없습니다.</p>
                       ) : (
                         teamSubs.map((sub, idx) => (
-                          <div key={idx} className="flex gap-4 items-start bg-slate-50 p-3 rounded-2xl">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xs font-black shadow-sm flex-shrink-0">
+                          <div key={idx} className="flex gap-4 items-start bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-xs font-black shadow-sm flex-shrink-0 text-slate-700">
                               S{sub.spotId}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -172,11 +180,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
                                   {sub.mediaUrl.match(/\.(mp4|webm|mov|ogg|m4v)$/i) || sub.mediaUrl.startsWith('data:video') ? (
                                     <video src={sub.mediaUrl} controls className="w-full rounded-xl max-h-40 bg-black" />
                                   ) : (
-                                    <img src={sub.mediaUrl} className="w-full h-32 object-cover rounded-xl shadow-sm" />
+                                    <img src={sub.mediaUrl} className="w-full h-32 object-cover rounded-xl shadow-sm border border-slate-200" />
                                   )}
                                 </div>
                               ) : sub.content ? (
-                                <p className="text-xs text-slate-500 bg-white p-2 rounded-lg border border-slate-100 italic">"{sub.content}"</p>
+                                <p className="text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100 font-medium">"{sub.content}"</p>
                               ) : (
                                 <p className="text-xs text-emerald-600 font-bold">글자 획득 완료</p>
                               )}
@@ -193,7 +201,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
         ) : (
           <>
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5" /> 스팟 위치 관리</h2>
+              <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5" /> 스팟 관리</h2>
               <button 
                 onClick={handleSaveAllSpots}
                 className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95"
@@ -204,27 +212,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
             </div>
             
             <p className="text-xs text-slate-500 bg-slate-100 p-3 rounded-xl border border-slate-200 leading-relaxed">
-              각 미션 장소(스팟)로 직접 이동한 뒤, <strong>'과녁'</strong> 버튼을 눌러 GPS를 찍으세요. 마지막으로 상단의 <strong>'전체 동기화'</strong>를 누르면 모든 참가자의 앱에 즉시 적용됩니다.
+              이름을 수정하거나 <strong>'과녁'</strong>을 눌러 GPS를 찍으세요. 변경 후 상단의 <strong>'전체 동기화'</strong>를 눌러야 저장됩니다.
             </p>
 
-            {/* 스팟 리스트 */}
             <div className="space-y-3 max-h-64 overflow-y-auto no-scrollbar pb-2">
               {localSpots.map((spot) => (
                 <div key={spot.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-xs">
+                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-xs shrink-0">
                       {spot.id}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">SPOT {spot.id} <span className="text-xs font-normal text-slate-500">({spot.character || '단어 없음'})</span></p>
-                      <p className="text-[10px] font-mono text-slate-400 leading-none mt-1">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="text"
+                          placeholder={`SPOT ${spot.id}`}
+                          className="text-sm font-bold text-indigo-700 bg-indigo-50/50 border border-slate-200 rounded px-2 py-0.5 outline-none focus:border-indigo-400 focus:bg-white w-28"
+                          value={spot.customName || ''}
+                          onChange={(e) => {
+                            const updated = localSpots.map(s => 
+                              s.id === spot.id ? { ...s, customName: e.target.value } : s
+                            );
+                            setLocalSpots(updated);
+                          }}
+                        />
+                        <span className="text-xs font-normal text-slate-500">({spot.character})</span>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-400 leading-none">
                         {spot.lat.toFixed(5)}, {spot.lng.toFixed(5)}
                       </p>
                     </div>
                   </div>
                   <button 
                     onClick={() => handleUpdateSpotLocation(spot.id)}
-                    className="p-3 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors border border-slate-100"
+                    className="p-3 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors border border-slate-100 shrink-0"
                   >
                     <Crosshair className="w-4 h-4" />
                   </button>
@@ -232,7 +253,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
               ))}
             </div>
 
-            {/* 지도 컴포넌트 추가 */}
             <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 relative z-0 mt-4">
               <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2">
                 <Map className="w-4 h-4 text-indigo-500" />
@@ -261,8 +281,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ spots, submissions, act
                   {localSpots.map(spot => (
                     <Marker key={spot.id} position={[spot.lat, spot.lng]} icon={createSpotIcon(spot.id)}>
                       <Popup>
-                        <strong>SPOT {spot.id}</strong><br/>
-                        {spot.character}
+                        <strong>{spot.customName || `SPOT ${spot.id}`}</strong><br/>
+                        획득 글자: {spot.character}
                       </Popup>
                     </Marker>
                   ))}

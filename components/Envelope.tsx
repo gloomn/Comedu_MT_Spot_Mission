@@ -6,10 +6,11 @@ interface EnvelopeProps {
   isNearby: boolean;
   onClick: () => void;
   spotId: number;
+  spotName?: string; // 🟢 추가: 스팟 이름 프롭스
   distance?: number;
 }
 
-const Envelope: React.FC<EnvelopeProps> = ({ isOpen, isNearby, onClick, spotId, distance }) => {
+const Envelope: React.FC<EnvelopeProps> = ({ isOpen, isNearby, onClick, spotId, spotName, distance }) => {
   return (
     <button
       onClick={onClick}
@@ -21,7 +22,11 @@ const Envelope: React.FC<EnvelopeProps> = ({ isOpen, isNearby, onClick, spotId, 
             : 'bg-slate-100 shadow-sm border border-slate-200 opacity-80'
       } rounded-2xl`}
     >
-      <div className="absolute top-2 left-3 text-[10px] font-black text-slate-400">SPOT {spotId}</div>
+      {/* 🟢 수정: 커스텀 이름이 있으면 표시, 없으면 SPOT N 표시 */}
+      <div className="absolute top-2 left-3 text-[10px] font-black text-slate-400">
+        {spotName || `SPOT ${spotId}`}
+      </div>
+      
       {!isNearby && !isOpen && (
         <div className="absolute top-2 right-2 bg-slate-200 text-slate-500 rounded-full p-1">
           <Lock className="w-3 h-3" />

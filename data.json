@@ -7,16 +7,18 @@
       "missionTitle": "미션 1: 릴스 찍기",
       "missionDescription": "지정된 장소에서 팀원들과 함께 즐거운 릴스 영상을 촬영하고 업로드하세요!",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.46892483895755,
+      "lng": 127.1380483541509,
+      "customName": "인사대숲"
     },
     {
       "id": 2,
       "character": "름",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.46885012745541,
+      "lng": 127.13940803904752,
+      "customName": "드림하우스"
     },
     {
       "id": 3,
@@ -25,16 +27,18 @@
       "missionTitle": "미션 2: 팀 단체샷",
       "missionDescription": "팀원 전원이 나오도록 단체 사진을 찍어주세요!",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.46862539701539,
+      "lng": 127.1411773271514,
+      "customName": "교정관 2층 거울앞"
     },
     {
       "id": 4,
       "character": " 육, 퓨",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 37.555,
+      "lng": 126.9708,
+      "customName": "제2과학교육관"
     },
     {
       "id": 5,
@@ -43,16 +47,18 @@
       "missionTitle": "미션 3: 전화 미션",
       "missionDescription": "운영본부(010-XXXX-XXXX)로 전화하여 오늘 미션의 핵심 단어를 알아내세요!",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.468810355324734,
+      "lng": 127.13950459857205,
+      "customName": "운동장 중앙"
     },
     {
       "id": 6,
       "character": "MT",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.468985538540174,
+      "lng": 127.14113787442547,
+      "customName": "사범1관"
     },
     {
       "id": 7,
@@ -61,106 +67,48 @@
       "missionTitle": "미션 4: 팀원 명단 작성",
       "missionDescription": "모든 팀원의 이름을 정확하게 작성해주세요.",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 37.555099999999996,
+      "lng": 126.9709,
+      "customName": "자연과학대학"
     },
     {
       "id": 8,
       "character": "팀",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 37.554399999999994,
+      "lng": 126.9708,
+      "customName": "웅비학생회관"
     },
     {
       "id": 9,
       "character": "터",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 36.468869443615425,
+      "lng": 127.14015438517042,
+      "customName": "마루공원"
     },
     {
       "id": 10,
       "character": "이, 은?",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46872462039145,
-      "lng": 127.14099143552912
+      "lat": 37.5543,
+      "lng": 126.97059999999999,
+      "customName": "교양관"
     }
   ],
-  "submissions": [
-    {
-      "teamName": "fkrlwl",
-      "spotId": 10,
-      "missionType": "NONE",
-      "timestamp": 1773033146744
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 5,
-      "missionType": "CALL",
-      "timestamp": 1773033169490
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 2,
-      "missionType": "NONE",
-      "timestamp": 1773033175728
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 4,
-      "missionType": "NONE",
-      "timestamp": 1773033177296
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 6,
-      "missionType": "NONE",
-      "timestamp": 1773033179200
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 8,
-      "missionType": "NONE",
-      "timestamp": 1773033181151
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 9,
-      "missionType": "NONE",
-      "timestamp": 1773033184271
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 1,
-      "missionType": "REELS",
-      "timestamp": 1773033249429,
-      "mediaUrl": "/uploads/media-1773033247833-329514638.mov"
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 3,
-      "missionType": "GROUP_SHOT",
-      "timestamp": 1773033286806,
-      "mediaUrl": "/uploads/media-1773033284967-209365102.jpeg"
-    },
-    {
-      "teamName": "fkrlwl",
-      "spotId": 7,
-      "missionType": "TEAM_NAMES",
-      "timestamp": 1773033362627,
-      "content": "fh"
-    }
-  ],
+  "submissions": [],
   "teams": [
-    "fkrlwl",
-    "도치",
-    "eqw",
-    "팀1"
+    "qwe",
+    "wlfk"
   ],
   "memos": {
-    "eqw": ""
+    "wlfk": "바보 멍청이dd"
+  },
+  "teamPasswords": {
+    "qwe": "qwe",
+    "wlfk": "1234"
   }
 }

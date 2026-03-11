@@ -35,7 +35,7 @@ const Notepad: React.FC<NotepadProps> = ({ memo, onMemoChange, onSave }) => {
     onMemoChange(localMemo); // 현재 값 강제 동기화
     setTimeout(() => {
       onSave();
-      alert('✅ 메모가 안전하게 저장되고 팀원들에게 동기화되었습니다!');
+      alert('메모가 저장되었습니다!');
     }, 100);
   };
 
@@ -60,7 +60,7 @@ const Notepad: React.FC<NotepadProps> = ({ memo, onMemoChange, onSave }) => {
       <div className="p-4 flex-1 flex flex-col bg-[#fdfbf7]">
         <textarea
           className="w-full h-full bg-transparent resize-none outline-none text-slate-700 leading-relaxed placeholder-slate-400"
-          placeholder="획득한 단어들을 조합해 최종 정답을 추리해보세요!&#13;&#10;(여기에 작성한 내용은 팀원들과 공유됩니다)"
+          placeholder="획득한 단어들을 조합해 최종 정답을 추리해보세요!"
           value={localMemo}
           onChange={handleChange}
           onFocus={() => setIsFocused(true)}  // 입력 시작
@@ -73,9 +73,6 @@ const Notepad: React.FC<NotepadProps> = ({ memo, onMemoChange, onSave }) => {
       
       {/* 하단 안내 문구 */}
       <div className="bg-slate-50 p-3 text-center border-t border-slate-100 shrink-0">
-        <p className="text-[10px] text-slate-400">
-          * 한글 입력 오류(두 번 써짐) 방지를 위해, 메모 작성 중에는 다른 팀원의 글이 보이지 않으며 키보드를 내리면 즉시 동기화됩니다.
-        </p>
       </div>
     </div>
   );

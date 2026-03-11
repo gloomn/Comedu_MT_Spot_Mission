@@ -1,4 +1,3 @@
-
 export enum MissionType {
   REELS = 'REELS',
   GROUP_SHOT = 'GROUP_SHOT',
@@ -16,14 +15,15 @@ export interface Spot {
   isCompleted: boolean;
   lat: number;
   lng: number;
+  customName?: string; // 🟢 추가: 관리자가 설정할 커스텀 이름
 }
 
 export interface Submission {
   teamName: string;
   spotId: number;
   missionType: MissionType;
-  content?: string; // For team names or text info
-  mediaUrl?: string; // Data URI for photos/videos
+  content?: string; 
+  mediaUrl?: string; 
   timestamp: number;
 }
 

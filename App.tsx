@@ -8,37 +8,43 @@ import Notepad from './components/Notepad';
 import AdminDashboard from './components/AdminDashboard';
 import { Trophy, MapPin, Stars, User, ShieldCheck, LayoutGrid, StickyNote, Home, Info, LogOut, Users } from 'lucide-react';
 
-// 소켓 연결 자동화 기능
 const socket = io('/', { autoConnect: true });
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewType>('LANDING');
   const [tab, setTab] = useState<TabType>('HOME');
   const [role, setRole] = useState<'PARTICIPANT' | 'ADMIN' | 'GUEST'>('GUEST');
+  
   const [teamName, setTeamName] = useState('');
+  const [teamPass, setTeamPass] = useState(''); 
   const [adminPass, setAdminPass] = useState('');
   
   const [spots, setSpots] = useState<Spot[]>(INITIAL_SPOTS);
   const [submissions, setSubmissions] = useState<Submission[]>([]); 
   const [activeTeams, setActiveTeams] = useState<string[]>([]);
   const [memo, setMemo] = useState<string>('');
-  
+  const [allMemos, setAllMemos] = useState<Record<string, string>>({});
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
   const [userPos, setUserPos] = useState<{lat: number, lng: number} | null>(null);
   
-  // GPS 에러 상태
   const [gpsErrorMsg, setGpsErrorMsg] = useState<string>('GPS 대기중...');
-  
-  // 🟢 추가: 위치 권한 안내 모달 상태
   const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
 
-  const saveToLocal = (updatedMemo: string, currentRole: any, currentTeam: string) => {
-    const state: AppState = { spots: [], memo: updatedMemo, role: currentRole, teamName: currentTeam };
+  const saveToLocal = (updatedMemo: string, currentRole: any, currentTeam: string, currentPass: string) => {
+    const state = { memo: updatedMemo, role: currentRole, teamName: currentTeam, teamPass: currentPass };
     localStorage.setItem('spotMissionState', JSON.stringify(state));
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('spotMissionState');
+    setRole('GUEST');
+    setView('LANDING');
+    setTeamName('');
+    setTeamPass('');
+    setAdminPass('');
+  };
+
   useEffect(() => {
-    // 🟢 추가: 처음 접속 시 위치 권한 모달 띄우기 (로컬 스토리지 확인)
     if (!localStorage.getItem('locationModalSeen')) {
       setShowLocationModal(true);
     }
@@ -46,15 +52,21 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('spotMissionState');
     if (saved) {
       try {
-        const parsed: AppState = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
         if (parsed.role !== 'GUEST') {
           setRole(parsed.role);
-          setTeamName(parsed.teamName);
-          setMemo(parsed.memo);
+          setTeamName(parsed.teamName || '');
+          setTeamPass(parsed.teamPass || '');
+          setMemo(parsed.memo || '');
           setView(parsed.role === 'ADMIN' ? 'ADMIN_PANEL' : 'DASHBOARD');
           
           if (parsed.role === 'PARTICIPANT') {
-            socket.emit('join_team', parsed.teamName);
+            socket.emit('join_team', { teamName: parsed.teamName, password: parsed.teamPass }, (res: any) => {
+              if (res && !res.success) {
+                alert('세션이 만료되었거나 비밀번호가 변경되었습니다. 다시 로그인해주세요.');
+                handleLogout();
+              }
+            });
           }
         }
       } catch (e) {
@@ -71,10 +83,14 @@ const App: React.FC = () => {
       setSubmissions(data.submissions || []);
       setActiveTeams(data.teams || []);
       
-      if (teamName && data.memos && data.memos[teamName] !== undefined) {
-        setMemo(data.memos[teamName]);
-        saveToLocal(data.memos[teamName], role, teamName);
+      if (data.memos) {
+        setAllMemos(data.memos);
+        if (teamName && data.memos[teamName] !== undefined) {
+          setMemo(data.memos[teamName]);
+          saveToLocal(data.memos[teamName], role, teamName, teamPass);
+        }
       }
+      
     });
 
     socket.on('teams_updated', (teams: string[]) => setActiveTeams(teams));
@@ -89,10 +105,17 @@ const App: React.FC = () => {
     });
 
     socket.on('memo_updated', (data: { teamName: string, memo: string }) => {
+      setAllMemos(prev => ({ ...prev, [data.teamName]: data.memo }));
       if (data.teamName === teamName) {
         setMemo(data.memo);
-        saveToLocal(data.memo, role, teamName);
+        saveToLocal(data.memo, role, teamName, teamPass);
       }
+    });
+
+    // 🟢 추가: 강제 로그아웃 신호를 받았을 때
+    socket.on('force_logout', (message: string) => {
+      alert(message);
+      handleLogout(); // 현재 기기 정보 초기화 및 랜딩 화면으로 쫓아냄
     });
 
     let watcherId: number | null = null;
@@ -126,15 +149,14 @@ const App: React.FC = () => {
       socket.off('spots_updated');
       socket.off('submissions_updated');
       socket.off('memo_updated');
+      socket.off('force_logout'); // 이벤트 정리
     };
-  }, [teamName, role]);
+  }, [teamName, role, teamPass]);
 
-  // 🟢 추가: 위치 권한 모달 닫기 및 권한 요청 트리거
   const handleAcceptLocation = () => {
     localStorage.setItem('locationModalSeen', 'true');
     setShowLocationModal(false);
     
-    // 사용자가 버튼을 눌렀을 때 브라우저의 기본 위치 권한 팝업을 강제로 띄웁니다.
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         () => {}, 
@@ -142,14 +164,6 @@ const App: React.FC = () => {
         { enableHighAccuracy: true }
       );
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('spotMissionState');
-    setRole('GUEST');
-    setView('LANDING');
-    setTeamName('');
-    setAdminPass('');
   };
 
   const handleDeleteTeam = (teamNameToDelete: string) => {
@@ -161,18 +175,25 @@ const App: React.FC = () => {
   const handleJoinParticipant = () => {
     const trimmedTeamName = teamName.trim();
     if (!trimmedTeamName) return alert('팀 이름을 입력해주세요.');
-    setTeamName(trimmedTeamName);
-    setRole('PARTICIPANT');
-    setView('DASHBOARD');
-    saveToLocal(memo, 'PARTICIPANT', trimmedTeamName);
-    socket.emit('join_team', trimmedTeamName);
+    if (!teamPass) return alert('팀 비밀번호를 입력해주세요.');
+
+    socket.emit('join_team', { teamName: trimmedTeamName, password: teamPass }, (res: any) => {
+      if (res && res.success) {
+        setTeamName(trimmedTeamName);
+        setRole('PARTICIPANT');
+        setView('DASHBOARD');
+        saveToLocal(memo, 'PARTICIPANT', trimmedTeamName, teamPass);
+      } else {
+        alert(res ? res.message : '서버 오류가 발생했습니다.');
+      }
+    });
   };
 
   const handleJoinAdmin = () => {
     if (adminPass === ADMIN_PASSWORD) {
       setRole('ADMIN');
       setView('ADMIN_PANEL');
-      saveToLocal(memo, 'ADMIN', 'ADMIN');
+      saveToLocal(memo, 'ADMIN', 'ADMIN', '');
     } else {
       alert('비밀번호가 틀렸습니다.');
     }
@@ -221,7 +242,6 @@ const App: React.FC = () => {
 
   return (
     <>
-      {/* 🟢 추가: 위치 권한 안내 모달 (모든 화면 위에 최상단으로 렌더링) */}
       {showLocationModal && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-sm">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in duration-300">
@@ -246,29 +266,70 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 랜딩 화면 (로그인) */}
       {view === 'LANDING' && (
         <div className="min-h-screen max-w-md mx-auto bg-indigo-600 flex flex-col items-center justify-center p-8 text-white relative overflow-hidden">
-          <Stars className="absolute -right-10 -top-10 w-64 h-64 text-white opacity-10 animate-pulse" />
+          <img 
+  src="logo.png" 
+  alt="background effect" 
+  className="absolute -right-10 -top-10 w-64 h-64 opacity-10 animate-pulse object-contain pointer-events-none" 
+/>
           <div className="relative z-10 w-full space-y-12">
             <div className="text-center flex flex-col items-center">
-              <Trophy className="w-16 h-16 text-amber-300 mb-4" />
+              {/* 🟢 추가된 서브타이틀 */}
+              <p className="text-xs font-bold text-indigo-200 mb-1.5 tracking-widest">연결의 중심에서 .COM</p>
               <span className="text-sm font-bold opacity-80 uppercase tracking-widest mb-1">2026 COMEDU MT</span>
               <h1 className="text-5xl font-black tracking-tighter uppercase">SPOT-MISSION</h1>
             </div>
 
             <div className="space-y-4">
               <div className="bg-white/10 backdrop-blur-lg p-6 rounded-3xl border border-white/20 space-y-4">
-                <h2 className="flex items-center gap-2 font-bold text-lg"><User className="w-5 h-5" /> 참여자 입장</h2>
-                <input 
-                  placeholder="팀 이름을 입력하세요"
-                  className="w-full bg-white/20 border-none rounded-2xl p-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/30"
-                  value={teamName}
-                  onChange={e => setTeamName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoinParticipant()}
-                />
-                <button onClick={handleJoinParticipant} className="w-full bg-white text-indigo-600 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-colors">
-                  시작하기
+                <div className="flex justify-between items-center">
+                  <h2 className="flex items-center gap-2 font-bold text-lg"><User className="w-5 h-5" /> 참여자 입장</h2>
+                </div>
+                
+                <div>
+                  <input 
+                    placeholder="팀 이름을 자유롭게 입력하세요"
+                    className="w-full bg-white/20 border border-white/10 rounded-2xl p-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/30 font-bold"
+                    value={teamName}
+                    onChange={e => setTeamName(e.target.value)}
+                  />
+                  
+                  <input 
+                    type="password"
+                    placeholder="새로운 비밀번호(숫자 4자리)"
+                    className="w-full bg-white/20 border border-white/10 rounded-2xl p-4 text-white placeholder-indigo-200 outline-none focus:ring-2 focus:ring-white/30 font-bold mt-3"
+                    value={teamPass}
+                    onChange={e => setTeamPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleJoinParticipant()}
+                  />
+                  <p className="text-[10px] text-indigo-200 ml-1 mt-1">* 처음 등록 시 입력한 번호가 해당 팀의 비밀번호가 됩니다.</p>
+                  
+                  {activeTeams.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-[10px] text-indigo-200 mb-1.5 ml-1">👇 현재 활동 중인 팀 (터치하여 선택)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeTeams.map(team => (
+                          <button
+                            key={team}
+                            onClick={() => {
+                              setTeamName(team);
+                              setTeamPass(''); 
+                            }}
+                            className={`text-[11px] font-bold px-3 py-1.5 rounded-full text-white transition-colors border active:scale-95 ${
+                              teamName === team ? 'bg-indigo-500 border-indigo-400' : 'bg-white/10 hover:bg-white/20 border-white/20'
+                            }`}
+                          >
+                            {team}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button onClick={handleJoinParticipant} className="w-full bg-white text-indigo-600 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-colors mt-2">
+                  입장하기
                 </button>
               </div>
 
@@ -288,10 +349,14 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+          {/* 🟢 추가된 개발자 크레딧 (푸터) */}
+          <div className="relative z-10 mt-8 mb-4 text-center text-[10px] text-indigo-200/60 font-medium tracking-widest space-y-1">
+            <p>Designed by Park Jun Hye</p>
+            <p>Built by Lee Ki Joon</p>
+          </div>
         </div>
       )}
 
-      {/* 관리자 대시보드 */}
       {view === 'ADMIN_PANEL' && (
         <AdminDashboard 
           spots={spots} 
@@ -301,14 +366,18 @@ const App: React.FC = () => {
           userPos={userPos} 
           onLogout={handleLogout}
           onDeleteTeam={handleDeleteTeam}
+          memos={allMemos}
         />
       )}
 
-      {/* 참가자 메인 화면 */}
       {view === 'DASHBOARD' && (
         <div className="min-h-screen max-w-md mx-auto bg-slate-50 flex flex-col pb-24">
           <header className="bg-indigo-600 px-6 pt-12 pb-8 rounded-b-[2.5rem] shadow-xl text-white relative overflow-hidden">
-            <Stars className="absolute -right-4 -top-4 w-32 h-32 text-indigo-500 opacity-30" />
+            <img 
+  src="logo.png" 
+  alt="background effect" 
+  className="absolute -right-4 -top-4 w-40 h-40 text-indigo-500 opacity-30"
+/>
             <div className="relative z-10">
               <div className="flex justify-between items-center mb-4">
                  <div className="flex items-center gap-2">
@@ -401,6 +470,7 @@ const App: React.FC = () => {
                     <Envelope
                       key={spot.id}
                       spotId={spot.id}
+                      spotName={spot.customName}
                       isOpen={completed}
                       isNearby={isNearby(spot)}
                       distance={getSpotDistance(spot)}
@@ -432,7 +502,7 @@ const App: React.FC = () => {
                 memo={memo} 
                 onMemoChange={(val) => {
                   setMemo(val);
-                  saveToLocal(val, role, teamName);
+                  saveToLocal(val, role, teamName, teamPass);
                   socket.emit('update_memo', { teamName, memo: val });
                 }} 
                 onSave={() => {
