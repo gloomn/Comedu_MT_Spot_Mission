@@ -155,7 +155,7 @@ const MissionModal: React.FC<MissionModalProps> = ({ spot, teamName, onClose, on
           <div className="space-y-4">
             <div className="bg-orange-50 p-4 rounded-xl flex items-center gap-3">
               <Phone className="text-orange-600" />
-              <p className="text-sm font-medium text-orange-900">전화 후 단어를 확인하세요</p>
+              <p className="text-sm font-medium text-orange-900">010-9350-0326</p>
             </div>
             <p className="text-center py-6 text-xl font-bold text-slate-700">핵심 단어를 알아내셨나요?</p>
           </div>

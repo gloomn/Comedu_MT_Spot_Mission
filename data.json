@@ -7,8 +7,8 @@
       "missionTitle": "미션 1: 릴스 찍기",
       "missionDescription": "지정된 장소에서 팀원들과 함께 즐거운 릴스 영상을 촬영하고 업로드하세요!",
       "isCompleted": false,
-      "lat": 36.46892483895755,
-      "lng": 127.1380483541509,
+      "lat": 36.46607549975051,
+      "lng": 127.13841768999279,
       "customName": "인사대숲"
     },
     {
@@ -16,8 +16,8 @@
       "character": "름",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 36.46885012745541,
-      "lng": 127.13940803904752,
+      "lat": 36.47175816753024,
+      "lng": 127.14115350025281,
       "customName": "드림하우스"
     },
     {
@@ -36,8 +36,8 @@
       "character": " 육, 퓨",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 37.555,
-      "lng": 126.9708,
+      "lat": 36.47048399908238,
+      "lng": 127.14249751950669,
       "customName": "제2과학교육관"
     },
     {
@@ -45,10 +45,10 @@
       "character": "과",
       "missionType": "CALL",
       "missionTitle": "미션 3: 전화 미션",
-      "missionDescription": "운영본부(010-XXXX-XXXX)로 전화하여 오늘 미션의 핵심 단어를 알아내세요!",
+      "missionDescription": "아래 전화번호로 전화하여 미션 단어를 알아내세요!",
       "isCompleted": false,
-      "lat": 36.468810355324734,
-      "lng": 127.13950459857205,
+      "lat": 36.46866393612221,
+      "lng": 127.13851269648049,
       "customName": "운동장 중앙"
     },
     {
@@ -67,8 +67,8 @@
       "missionTitle": "미션 4: 팀원 명단 작성",
       "missionDescription": "모든 팀원의 이름을 정확하게 작성해주세요.",
       "isCompleted": false,
-      "lat": 37.555099999999996,
-      "lng": 126.9709,
+      "lat": 36.4708997843499,
+      "lng": 127.14440713075108,
       "customName": "자연과학대학"
     },
     {
@@ -76,8 +76,8 @@
       "character": "팀",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 37.554399999999994,
-      "lng": 126.9708,
+      "lat": 36.469544651132445,
+      "lng": 127.13946746978145,
       "customName": "웅비학생회관"
     },
     {
@@ -94,21 +94,17 @@
       "character": "이, 은?",
       "missionType": "NONE",
       "isCompleted": false,
-      "lat": 37.5543,
-      "lng": 126.97059999999999,
+      "lat": 36.4693392003716,
+      "lng": 127.1391734397469,
       "customName": "교양관"
     }
   ],
   "submissions": [],
   "teams": [
-    "qwe",
-    "wlfk"
+    "test"
   ],
-  "memos": {
-    "wlfk": "바보 멍청이dd"
-  },
+  "memos": {},
   "teamPasswords": {
-    "qwe": "qwe",
-    "wlfk": "1234"
+    "test": "1234"
   }
 }
